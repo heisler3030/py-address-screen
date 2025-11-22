@@ -39,8 +39,8 @@ cp .env.example .env
 To install py-address-screen directly in a Databricks notebook:
 
 ```python
-# Install from GitHub
-%pip install git+https://github.com/heisler3030/py-address-screen.git@databricks_package
+# Install from GitHub with Databricks support
+%pip install git+https://github.com/heisler3030/py-address-screen.git@databricks_package[databricks]
 
 # Import the package
 import pandas as pd
@@ -50,6 +50,8 @@ from py_address_screen import screen_dataframe, screen_addresses_from_dataframe
 import os
 os.environ['CHAINALYSIS_API_KEY'] = 'your_api_key_here'
 ```
+
+**Note**: The `[databricks]` extra installs `nest_asyncio` which helps handle event loop conflicts in notebook environments.
 
 **Note**: In Databricks production environments, store your API key securely using [Databricks Secrets](https://docs.databricks.com/security/secrets/index.html):
 

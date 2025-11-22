@@ -185,7 +185,39 @@ def screen_dataframe(
     Returns:
         DataFrame with screening results
     """
-    return asyncio.run(screen_addresses_from_dataframe(df, address_column, include_indirect))
+    try:
+        # Try to get current event loop
+        loop = asyncio.get_running_loop()
+        # If we get here, there's a running loop (like in Databricks)
+        
+        # Try using nest_asyncio first (if available)
+        try:
+            import nest_asyncio  # type: ignore
+            nest_asyncio.apply()
+            return asyncio.run(screen_addresses_from_dataframe(df, address_column, include_indirect))
+        except ImportError:
+            # nest_asyncio not available, run in a separate thread
+            import concurrent.futures
+            import threading
+            
+            def run_in_thread():
+                # Run in a new thread with a new event loop
+                new_loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(new_loop)
+                try:
+                    return new_loop.run_until_complete(
+                        screen_addresses_from_dataframe(df, address_column, include_indirect)
+                    )
+                finally:
+                    new_loop.close()
+            
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                future = executor.submit(run_in_thread)
+                return future.result()
+                
+    except RuntimeError:
+        # No event loop running, we can use asyncio.run normally
+        return asyncio.run(screen_addresses_from_dataframe(df, address_column, include_indirect))
 
 
 def print_usage():

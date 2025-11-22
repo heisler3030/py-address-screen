@@ -131,6 +131,86 @@ class CSVProcessor:
             raise
     
     @staticmethod
+    def results_to_dataframe(results: List[Dict[str, Any]], include_indirect: bool = True) -> pd.DataFrame:
+        """
+        Convert screening results to a pandas DataFrame.
+        
+        Args:
+            results: List of screening result dictionaries
+            include_indirect: Whether to include indirect exposure columns
+            
+        Returns:
+            DataFrame with screening results
+        """
+        if not results:
+            logger.warning("No results to convert")
+            return pd.DataFrame()
+
+        try:
+            # Extract categories from successful results
+            categories_set = set()
+            
+            for result in results:
+                if result.get("status") == "success" and "row_data" in result:
+                    row_data = result["row_data"]
+                    for key in row_data.keys():
+                        if include_indirect:
+                            if key.endswith("_direct"):
+                                categories_set.add(key[:-7])
+                            elif key.endswith("_indirect"):
+                                categories_set.add(key[:-9])
+                        else:
+                            if key not in ["address", "screenStatus", "risk", "riskReason", "category", "name"]:
+                                categories_set.add(key)
+            
+            categories = sorted(list(categories_set))
+            
+            # Build header
+            columns = ["address", "screenStatus", "risk", "riskReason", "category", "name"]
+            for cat in categories:
+                if include_indirect:
+                    columns.extend([f"{cat}_direct", f"{cat}_indirect"])
+                else:
+                    columns.append(cat)
+            
+            # Build rows - all results have row_data now
+            rows = []
+            for result in results:
+                row_data = result["row_data"]
+                
+                # Basic fields
+                row = [
+                    row_data.get("address", ""),
+                    row_data.get("screenStatus", ""),
+                    row_data.get("risk", ""),
+                    row_data.get("riskReason", ""),
+                    row_data.get("category", ""),
+                    row_data.get("name", "")
+                ]
+                
+                # Category exposures
+                for cat in categories:
+                    if include_indirect:
+                        direct_val = row_data.get(f"{cat}_direct", "")
+                        indirect_val = row_data.get(f"{cat}_indirect", "")
+                        row.extend([direct_val or "", indirect_val or ""])
+                    else:
+                        val = row_data.get(cat, "")
+                        row.append(val or "")
+                
+                rows.append(row)
+            
+            # Create DataFrame
+            df = pd.DataFrame(rows, columns=columns)
+            
+            logger.info(f"Converted {len(results)} results to DataFrame with shape {df.shape}")
+            return df
+            
+        except Exception as e:
+            logger.error(f"Error converting results to DataFrame: {e}")
+            raise
+    
+    @staticmethod
     def validate_csv_format(file_path: str, required_columns: Optional[List[str]] = None) -> bool:
         """
         Validate that a CSV file has the required format.

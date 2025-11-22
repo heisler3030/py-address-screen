@@ -1,6 +1,6 @@
 # py-address-screen
 
-A Python command-line utility for cryptocurrency address screening using the Chainalysis Address Screening API. This is a Python port of the original [node-address-screen](https://github.com/heisler3030/node-address-screen) project.
+A Python command-line utility and package for cryptocurrency address screening using the Chainalysis Address Screening API. This is a Python port of the original [node-address-screen](https://github.com/heisler3030/node-address-screen) project.
 
 ## Installation
 
@@ -44,6 +44,8 @@ CHAINALYSIS_API_KEY=your_api_key_here
 
 ## Usage
 
+### Command Line Interface
+
 The application requires an input CSV file containing cryptocurrency addresses:
 
 ```bash
@@ -58,6 +60,30 @@ python main.py addresses.csv results.csv
 
 If no output file is specified, the application will create one by adding `_screened` to the input filename:
 - `addresses.csv` → `addresses_screened.csv`
+
+### Python Package Interface
+
+You can also use py-address-screen as a Python package to screen DataFrames directly (useful for Databricks notebooks):
+
+```python
+import pandas as pd
+from py_address_screen import screen_dataframe, screen_addresses_from_dataframe
+
+# Create a DataFrame with addresses
+df = pd.DataFrame({
+    'address': ['1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2', '3J98t1WpEZ73CNmQviecrnyiWrnqRhWNLy']
+})
+
+# Screen addresses (synchronous)
+result_df = screen_dataframe(df, address_column='address', include_indirect=True)
+
+# Or screen asynchronously
+import asyncio
+result_df = await screen_addresses_from_dataframe(df, address_column='address', include_indirect=True)
+
+print(f"Screened {len(result_df)} addresses")
+print(result_df[['address', 'screenStatus', 'risk', 'riskReason']])
+```
 
 ### Configuration Options
 
@@ -98,6 +124,59 @@ python main.py example-input.csv
 ```bash
 python main.py addresses.csv my_results.csv
 ```
+
+### Example: DataFrame Usage in Databricks
+
+```python
+# In a Databricks notebook cell
+import pandas as pd
+from py_address_screen import screen_dataframe
+
+# Load addresses from your data source
+df = spark.sql("SELECT address FROM your_table WHERE address IS NOT NULL").toPandas()
+
+# Screen the addresses
+screened_df = screen_dataframe(df, address_column='address', include_indirect=True)
+
+# Convert back to Spark DataFrame for further processing
+screened_spark_df = spark.createDataFrame(screened_df)
+
+# Save results
+screened_spark_df.write.mode("overwrite").saveAsTable("screened_addresses")
+```
+
+### Example: Batch Processing with Error Handling
+
+```python
+import pandas as pd
+from py_address_screen import screen_dataframe
+
+# Read addresses from CSV
+df = pd.read_csv("large_address_list.csv")
+
+try:
+    # Screen in batches for large datasets
+    batch_size = 100
+    results = []
+    
+    for i in range(0, len(df), batch_size):
+        batch_df = df[i:i+batch_size]
+        batch_result = screen_dataframe(batch_df, include_indirect=False)  # Faster without indirect
+        results.append(batch_result)
+    
+    # Combine all results
+    final_result = pd.concat(results, ignore_index=True)
+    final_result.to_csv("screened_results.csv", index=False)
+    
+except Exception as e:
+    print(f"Error during screening: {e}")
+```
+
+## Examples Directory
+
+See the `examples/` directory for more comprehensive usage examples:
+- `examples/simple_dataframe.py` - Basic DataFrame usage
+- `examples/databricks_example.py` - Complete Databricks integration example with error handling and risk analysis
 
 ## API Rate Limits
 

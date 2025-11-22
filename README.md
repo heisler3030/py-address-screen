@@ -57,42 +57,34 @@ CHAINALYSIS_API_KEY=your_api_key_here
 CHAINALYSIS_BASE_URL=https://api.chainalysis.com
 RATE_LIMIT=5
 MAX_CONCURRENT_REQUESTS=10
-MAX_RETRIES=3
-RETRY_DELAY=1.0
 INCLUDE_INDIRECT_EXPOSURE=true
-OUTPUT_FORMAT=csv
 ```
 
 ## Usage
 
-### Basic Usage
+The application requires an input CSV file containing cryptocurrency addresses:
 
 ```bash
-python main.py input_addresses.csv
+python main.py addresses.csv
 ```
 
-### Advanced Options
+You can optionally specify an output file:
 
 ```bash
-python main.py input_addresses.csv \
-  --output results.csv \
-  --address-column wallet_address \
-  --rate-limit 3 \
-  --max-concurrent 5 \
-  --no-indirect \
-  --verbose
+python main.py addresses.csv results.csv
 ```
 
-### Command Line Options
+If no output file is specified, the application will create one by adding `_screened` to the input filename:
+- `addresses.csv` → `addresses_screened.csv`
 
-- `INPUT_FILE`: Path to CSV file containing addresses to screen (required)
-- `-o, --output PATH`: Output file path (default: adds `_screened` to input filename)
-- `-c, --address-column TEXT`: Name of the column containing addresses (default: "address")
-- `-r, --rate-limit INTEGER`: API requests per second (default: 5)
-- `-m, --max-concurrent INTEGER`: Maximum concurrent requests (default: 10)
-- `--no-indirect`: Exclude indirect exposure from screening
-- `-v, --verbose`: Enable verbose logging
-- `--help`: Show help message
+### Configuration Options
+
+All configuration is done through the `.env` file or environment variables:
+
+- `RATE_LIMIT`: API requests per second (default: 5)
+- `MAX_CONCURRENT_REQUESTS`: Maximum concurrent requests (default: 10)
+- `INCLUDE_INDIRECT_EXPOSURE`: Include indirect exposure (default: true)
+- `CHAINALYSIS_API_KEY`: Your API key (required)
 
 ## Input CSV Format
 
@@ -107,42 +99,38 @@ bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh,Bitcoin Bech32 address
 
 ## Output Format
 
-The output CSV will include the following columns:
+The output CSV includes the following columns:
 
 - `address`: The cryptocurrency address
-- `risk_rating`: Risk rating (Low, Medium, High, Unknown, Error)
-- `category`: Risk category
-- `total_exposure`: Total exposure amount
-- `direct_exposure`: Direct exposure amount
-- `indirect_exposure`: Indirect exposure amount (if enabled)
-- `status`: Processing status (success/error)
-- `error`: Error message (if any)
+- `screenStatus`: Screening status or error code (e.g., "complete", "400 Bad Request")
+- `risk`: Risk rating (Low, Medium, High, Severe)
+- `riskReason`: Detailed risk explanation
+- `category`: Primary risk category
+- `name`: Entity name (if identified)
+- `{category}_direct`: Direct exposure amount for each risk category
+- `{category}_indirect`: Indirect exposure amount for each risk category (if enabled)
+
+For addresses that fail to screen, only the `address` and `screenStatus` fields are populated with the error information.
 
 ## Examples
 
-See the `examples/` directory for sample input files.
-
-### Example 1: Basic screening
+### Example: Basic screening
 ```bash
-python main.py examples/addresses.csv
+python main.py example-input.csv
 ```
 
-### Example 2: Custom output and column name
+### Example: Custom output file
 ```bash
-python main.py my_addresses.csv -o my_results.csv -c wallet_address
-```
-
-### Example 3: Conservative rate limiting
-```bash
-python main.py addresses.csv -r 2 -m 3 --verbose
+python main.py addresses.csv my_results.csv
 ```
 
 ## API Rate Limits
 
-The Chainalysis API has rate limits. The default settings (5 requests/second, 10 concurrent) should work well for most use cases. If you experience rate limiting errors, try reducing these values:
+The Chainalysis API has rate limits. The default settings (5 requests/second, 10 concurrent) should work well for most use cases. If you experience rate limiting errors, adjust these values in your `.env` file:
 
-```bash
-python main.py addresses.csv --rate-limit 2 --max-concurrent 3
+```env
+RATE_LIMIT=2
+MAX_CONCURRENT_REQUESTS=3
 ```
 
 ## Error Handling
@@ -157,29 +145,23 @@ All errors are logged and included in the output CSV for review.
 
 ## Logging
 
-By default, the tool provides informational logging. Use `--verbose` for detailed debug information:
-
-```bash
-python main.py addresses.csv --verbose
-```
+The tool provides informational logging by default. All configuration is managed through environment variables.
 
 ## Project Structure
 
 ```
 py-address-screen/
 ├── py_address_screen/
-│   ├── __init__.py
-│   ├── api_client.py      # Chainalysis API client
-│   ├── cli.py             # Command-line interface
-│   ├── config.py          # Configuration management
-│   └── csv_processor.py   # CSV file processing
-├── examples/
-│   └── addresses.csv      # Sample input file
-├── .env.example           # Environment configuration template
+│   ├── __init__.py           # Main application logic
+│   ├── api_client.py         # Chainalysis API client
+│   ├── config.py             # Configuration management
+│   └── csv_processor.py      # CSV file processing
+├── .env.example              # Environment configuration template
 ├── .github/
 │   └── copilot-instructions.md
-├── main.py               # Main entry point
-├── requirements.txt      # Python dependencies
+├── example-input.csv         # Sample input file
+├── main.py                   # Main entry point
+├── requirements.txt          # Python dependencies
 └── README.md
 ```
 
@@ -208,7 +190,7 @@ This Python version maintains compatibility with the original Node.js project wh
 - **Better Error Handling**: More detailed error reporting
 - **Type Hints**: Full type annotation for better code clarity
 - **Pandas Integration**: Leverages pandas for CSV processing
-- **Click CLI**: Modern command-line interface with Click
+- **Simplified Usage**: Environment-based configuration without CLI options
 
 ## Contributing
 

@@ -52,7 +52,7 @@ class CSVProcessor:
     @staticmethod
     def write_results_to_csv(results: List[Dict[str, Any]], output_path: str, include_indirect: bool = True) -> None:
         """
-        Write screening results to a CSV file in the format matching Node.js version.
+        Write screening results to a CSV file.
         
         Args:
             results: List of screening result dictionaries
@@ -64,82 +64,61 @@ class CSVProcessor:
             return
         
         try:
-            # Extract categories dynamically from the results
+            # Extract categories from successful results
             categories_set = set()
             
             for result in results:
                 if result.get("status") == "success" and "row_data" in result:
                     row_data = result["row_data"]
-                    # Extract category names from row_data keys
                     for key in row_data.keys():
                         if include_indirect:
                             if key.endswith("_direct"):
-                                categories_set.add(key[:-7])  # Remove "_direct"
+                                categories_set.add(key[:-7])
                             elif key.endswith("_indirect"):
-                                categories_set.add(key[:-9])  # Remove "_indirect"
+                                categories_set.add(key[:-9])
                         else:
-                            # For no-indirect mode, look for keys that don't have basic field names
                             if key not in ["address", "screenStatus", "risk", "riskReason", "category", "name"]:
                                 categories_set.add(key)
             
-            # Convert to sorted list for consistent output
             categories = sorted(list(categories_set))
             
-            # Fail if no categories found
             if not categories:
-                raise ValueError("No exposure categories found in results - cannot generate CSV output")
+                raise ValueError("No exposure categories found in results")
             
-            # Build the header
+            # Build header
             header = ["address", "screenStatus", "risk", "riskReason", "category", "name"]
-            
             for cat in categories:
                 if include_indirect:
                     header.extend([f"{cat}_direct", f"{cat}_indirect"])
                 else:
                     header.append(cat)
             
-            # Prepare rows
+            # Build rows - all results have row_data now
             rows = []
             for result in results:
-                if result.get("status") == "success" and "row_data" in result:
-                    row_data = result["row_data"]
-                    row = []
-                    
-                    # Add basic fields
-                    row.append(row_data.get("address", ""))
-                    row.append(row_data.get("screenStatus", ""))
-                    row.append(row_data.get("risk", ""))
-                    row.append(row_data.get("riskReason", ""))
-                    row.append(row_data.get("category", ""))
-                    row.append(row_data.get("name", ""))
-                    
-                    # Add category exposures
-                    for cat in categories:
-                        if include_indirect:
-                            direct_val = row_data.get(f"{cat}_direct", "")
-                            indirect_val = row_data.get(f"{cat}_indirect", "")
-                            row.extend([direct_val if direct_val is not None else "",
-                                      indirect_val if indirect_val is not None else ""])
-                        else:
-                            val = row_data.get(cat, "")
-                            row.append(val if val is not None else "")
-                    
-                    rows.append(row)
-                else:
-                    # Error case - create a row with basic info and empty exposures
-                    row = [
-                        result.get("address", ""),
-                        "error",
-                        "Error",
-                        result.get("error", ""),
-                        "",
-                        ""
-                    ]
-                    
-                    # Add empty exposure columns
-                    exposure_cols = len(categories) * (2 if include_indirect else 1)
-                    row.extend([""] * exposure_cols)
-                    rows.append(row)
+                row_data = result["row_data"]
+                
+                # Basic fields
+                row = [
+                    row_data.get("address", ""),
+                    row_data.get("screenStatus", ""),
+                    row_data.get("risk", ""),
+                    row_data.get("riskReason", ""),
+                    row_data.get("category", ""),
+                    row_data.get("name", "")
+                ]
+                
+                # Category exposures
+                for cat in categories:
+                    if include_indirect:
+                        direct_val = row_data.get(f"{cat}_direct", "")
+                        indirect_val = row_data.get(f"{cat}_indirect", "")
+                        row.extend([direct_val or "", indirect_val or ""])
+                    else:
+                        val = row_data.get(cat, "")
+                        row.append(val or "")
+                
+                rows.append(row)
             
             # Write to CSV
             df = pd.DataFrame(rows, columns=header)

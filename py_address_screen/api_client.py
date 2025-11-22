@@ -14,10 +14,6 @@ from .config import Config
 
 logger = logging.getLogger(__name__)
 
-class ChanalysisAPIError(Exception):
-    """Custom exception for Chainalysis API errors."""
-    pass
-
 class ChanalysisAPIClient:
     """Async client for Chainalysis Address Screening API."""
     
@@ -46,12 +42,13 @@ class ChanalysisAPIClient:
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=1, max=10),
-        retry=retry_if_exception_type((aiohttp.ClientError, ChanalysisAPIError))
+        retry=retry_if_exception_type(aiohttp.ClientError),
+        reraise=True
     )
     async def _make_request(self, endpoint: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Make a rate-limited request to the API."""
         if not self.session:
-            raise ChanalysisAPIError("Client session not initialized")
+            raise RuntimeError("Client session not initialized")
             
         async with self._rate_limit_semaphore:
             url = f"{self.config.chainalysis_base_url}{endpoint}"
@@ -60,17 +57,15 @@ class ChanalysisAPIClient:
                 async with self.session.get(url, params=params) as response:
                     if response.status == 200:
                         return await response.json()
-                    elif response.status == 429:
-                        # Rate limited - wait a bit longer
-                        await asyncio.sleep(2)
-                        raise ChanalysisAPIError(f"Rate limited: {response.status}")
                     else:
-                        error_text = await response.text()
-                        raise ChanalysisAPIError(f"API error {response.status}: {error_text}")
+                        # For non-200 status codes, raise for status which will raise an exception
+                        response.raise_for_status()
+                        # This line should never be reached due to the exception above
+                        return {}
                         
             except aiohttp.ClientError as e:
                 logger.error(f"Request failed: {e}")
-                raise ChanalysisAPIError(f"Request failed: {e}")
+                raise
             
             # Rate limiting - wait between requests
             await asyncio.sleep(1.0 / self.config.rate_limit)
@@ -91,10 +86,10 @@ class ChanalysisAPIClient:
                 categories = [cat.get("categoryName", "") for cat in result["categories"] if cat.get("categoryName")]
             else:
                 # Raise exception if API format is unexpected
-                raise ChanalysisAPIError(f"Unexpected categories API response format: {type(result)}")
+                raise ValueError(f"Unexpected categories API response format: {type(result)}")
             
             if not categories:
-                raise ChanalysisAPIError("No categories returned from API")
+                raise ValueError("No categories returned from API")
             
             self._categories = sorted(categories)
             logger.info(f"Fetched {len(self._categories)} categories from API")
@@ -102,11 +97,10 @@ class ChanalysisAPIClient:
             
         except Exception as e:
             logger.error(f"Failed to fetch categories from API: {e}")
-            raise ChanalysisAPIError(f"Cannot proceed without categories from API: {e}")
+            raise ValueError(f"Cannot proceed without categories from API: {e}")
 
     
     async def screen_address(self, address: str) -> Dict[str, Any]:
-        """Screen a single cryptocurrency address."""
         endpoint = f"/api/risk/v2/entities/{address}"
         
         try:
@@ -114,10 +108,20 @@ class ChanalysisAPIClient:
             return await self._format_screening_result(address, result)
         except Exception as e:
             logger.error(f"Failed to screen address {address}: {e}")
-            return self._format_error_result(address, str(e))
+            
+            # Simplify error message for aiohttp ClientResponseError
+            error_message = str(e)
+            if isinstance(e, aiohttp.ClientResponseError):
+                # Extract status code and message from ClientResponseError
+                error_message = f"{e.status} {e.message}"
+            
+            return self._format_error_result(address, error_message)
     
     async def screen_addresses(self, addresses: List[str]) -> List[Dict[str, Any]]:
         """Screen multiple addresses concurrently."""
+        # Fetch categories once before screening all addresses
+        await self.fetch_categories()
+        
         semaphore = asyncio.Semaphore(self.config.max_concurrent_requests)
         
         async def screen_with_semaphore(address: str) -> Dict[str, Any]:
@@ -138,9 +142,9 @@ class ChanalysisAPIClient:
         return formatted_results
     
     async def _format_screening_result(self, address: str, api_result: Dict[str, Any]) -> Dict[str, Any]:
-        """Format the API response into a consistent structure matching Node.js version."""
-        # Get categories dynamically from API
-        categories = await self.fetch_categories()
+        if self._categories is None:
+            raise ValueError("Categories not initialized. Call fetch_categories() first.")
+        categories = self._categories
         
         # Extract basic information
         screen_status = api_result.get("status", "COMPLETE").lower()
@@ -205,9 +209,9 @@ class ChanalysisAPIClient:
             "error": error_message,
             "row_data": {
                 "address": address,
-                "screenStatus": "error",
-                "risk": "Error",
-                "riskReason": error_message,
+                "screenStatus": error_message,
+                "risk": "",
+                "riskReason": "",
                 "category": "",
                 "name": ""
             }

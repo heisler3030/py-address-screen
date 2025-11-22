@@ -9,7 +9,7 @@ A Python command-line utility and package for cryptocurrency address screening u
 - Python 3.8 or higher
 - Chainalysis API key
 
-### Setup
+### Local Development Setup
 
 1. Clone the repository:
 ```bash
@@ -32,6 +32,32 @@ pip install -r requirements.txt
 ```bash
 cp .env.example .env
 # Edit .env and add your Chainalysis API key
+```
+
+### Databricks Installation
+
+To install py-address-screen directly in a Databricks notebook:
+
+```python
+# Install from GitHub
+%pip install git+https://github.com/heisler3030/py-address-screen.git@databricks_package
+
+# Import the package
+import pandas as pd
+from py_address_screen import screen_dataframe, screen_addresses_from_dataframe
+
+# Configure your API key (do this once per session)
+import os
+os.environ['CHAINALYSIS_API_KEY'] = 'your_api_key_here'
+```
+
+**Note**: In Databricks production environments, store your API key securely using [Databricks Secrets](https://docs.databricks.com/security/secrets/index.html):
+
+```python
+# Using Databricks secrets (recommended for production)
+dbutils.secrets.get(scope="your-scope", key="chainalysis-api-key")
+import os
+os.environ['CHAINALYSIS_API_KEY'] = dbutils.secrets.get(scope="your-scope", key="chainalysis-api-key")
 ```
 
 ## Configuration
@@ -60,6 +86,12 @@ python main.py addresses.csv results.csv
 
 If no output file is specified, the application will create one by adding `_screened` to the input filename:
 - `addresses.csv` → `addresses_screened.csv`
+
+**Alternative**: If you install the package (e.g., in Databricks), you can also use the CLI tool directly:
+
+```bash
+py-address-screen addresses.csv results.csv
+```
 
 ### Python Package Interface
 

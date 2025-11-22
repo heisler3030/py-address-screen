@@ -14,6 +14,19 @@ from .api_client import ChanalysisAPIClient
 from .config import Config
 from .csv_processor import CSVProcessor
 
+# Package version
+__version__ = "1.0.0"
+
+# Public API exports
+__all__ = [
+    "screen_addresses_from_file",
+    "screen_addresses_from_dataframe", 
+    "screen_dataframe",
+    "print_usage",
+    "main",
+    "__version__"
+]
+
 __version__ = "1.0.0"
 __author__ = "Python Port of node-address-screen"
 

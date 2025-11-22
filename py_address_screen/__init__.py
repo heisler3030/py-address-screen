@@ -6,7 +6,7 @@ import asyncio
 import logging
 import sys
 from pathlib import Path
-from typing import Optional, Union
+from typing import Any, Optional, Union
 
 import pandas as pd
 
@@ -104,25 +104,30 @@ async def screen_addresses_from_file(
 
 
 async def screen_addresses_from_dataframe(
-    df: pd.DataFrame,
+    df: Any,  # pandas DataFrame or PySpark DataFrame
     address_column: str = "address",
     include_indirect: bool = True
 ) -> pd.DataFrame:
     """
-    Screen cryptocurrency addresses from a pandas DataFrame.
+    Screen cryptocurrency addresses from a pandas or PySpark DataFrame.
     
     Args:
-        df: Input DataFrame containing addresses to screen
+        df: Input DataFrame containing addresses to screen (pandas or PySpark)
         address_column: Name of the column containing addresses (default: "address")
         include_indirect: Include indirect exposure in results (default: True)
         
     Returns:
-        DataFrame with screening results
+        pandas DataFrame with screening results
     """
     try:
         # Load configuration
         config = Config.from_env()
         config.include_indirect_exposure = include_indirect
+        
+        # Handle PySpark DataFrame by converting to pandas
+        if hasattr(df, 'toPandas') and callable(getattr(df, 'toPandas')):
+            logger.info("Converting PySpark DataFrame to pandas...")
+            df = df.toPandas()
         
         logger.info(f"Starting address screening for {len(df)} rows")
         logger.info(f"Rate limit: {config.rate_limit} req/s, Max concurrent: {config.max_concurrent_requests}")
@@ -170,7 +175,7 @@ async def screen_addresses_from_dataframe(
 
 
 def screen_dataframe(
-    df: pd.DataFrame,
+    df: Any,  # pandas DataFrame or PySpark DataFrame
     address_column: str = "address",
     include_indirect: bool = True
 ) -> pd.DataFrame:
@@ -178,12 +183,12 @@ def screen_dataframe(
     Synchronous wrapper for DataFrame screening (for Databricks notebooks).
     
     Args:
-        df: Input DataFrame containing addresses to screen
+        df: Input DataFrame containing addresses to screen (pandas or PySpark)
         address_column: Name of the column containing addresses (default: "address")
         include_indirect: Include indirect exposure in results (default: True)
         
     Returns:
-        DataFrame with screening results
+        pandas DataFrame with screening results
     """
     try:
         # Try to get current event loop

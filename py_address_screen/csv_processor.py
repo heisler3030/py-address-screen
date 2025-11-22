@@ -113,9 +113,11 @@ class CSVProcessor:
                     if include_indirect:
                         direct_val = row_data.get(f"{cat}_direct", "")
                         indirect_val = row_data.get(f"{cat}_indirect", "")
+                        # Keep empty strings for CSV compatibility
                         row.extend([direct_val or "", indirect_val or ""])
                     else:
                         val = row_data.get(cat, "")
+                        # Keep empty strings for CSV compatibility
                         row.append(val or "")
                 
                 rows.append(row)
@@ -193,15 +195,25 @@ class CSVProcessor:
                     if include_indirect:
                         direct_val = row_data.get(f"{cat}_direct", "")
                         indirect_val = row_data.get(f"{cat}_indirect", "")
-                        row.extend([direct_val or "", indirect_val or ""])
+                        # Convert empty strings to None for numeric columns
+                        direct_val = None if direct_val == "" else direct_val
+                        indirect_val = None if indirect_val == "" else indirect_val
+                        row.extend([direct_val, indirect_val])
                     else:
                         val = row_data.get(cat, "")
-                        row.append(val or "")
+                        # Convert empty strings to None for numeric columns  
+                        val = None if val == "" else val
+                        row.append(val)
                 
                 rows.append(row)
             
             # Create DataFrame
             df = pd.DataFrame(rows, columns=columns)
+            
+            # Convert numeric columns to proper types for better compatibility
+            numeric_columns = [col for col in df.columns if col not in ["address", "screenStatus", "risk", "riskReason", "category", "name"]]
+            for col in numeric_columns:
+                df[col] = pd.to_numeric(df[col], errors='coerce')
             
             logger.info(f"Converted {len(results)} results to DataFrame with shape {df.shape}")
             return df

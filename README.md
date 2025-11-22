@@ -39,8 +39,11 @@ cp .env.example .env
 To install py-address-screen directly in a Databricks notebook:
 
 ```python
-# Install from GitHub with Databricks support
-%pip install git+https://github.com/heisler3030/py-address-screen.git@databricks_package[databricks]
+# Install the package from GitHub
+%pip install git+https://github.com/heisler3030/py-address-screen.git@databricks_package
+
+# If you want the optimized async support, install nest_asyncio separately
+%pip install nest_asyncio
 
 # Import the package
 import pandas as pd
@@ -51,7 +54,7 @@ import os
 os.environ['CHAINALYSIS_API_KEY'] = 'your_api_key_here'
 ```
 
-**Note**: The `[databricks]` extra installs `nest_asyncio` which helps handle event loop conflicts in notebook environments.
+**Note**: Installing `nest_asyncio` separately provides better performance for handling event loops in notebook environments, but the package works without it using a threading fallback.
 
 **Note**: In Databricks production environments, store your API key securely using [Databricks Secrets](https://docs.databricks.com/security/secrets/index.html):
 
@@ -166,11 +169,13 @@ python main.py addresses.csv my_results.csv
 import pandas as pd
 from py_address_screen import screen_dataframe
 
-# Load addresses from your data source
+# Option 1: Load addresses from Spark and convert to pandas
 df = spark.sql("SELECT address FROM your_table WHERE address IS NOT NULL").toPandas()
-
-# Screen the addresses
 screened_df = screen_dataframe(df, address_column='address', include_indirect=True)
+
+# Option 2: Pass PySpark DataFrame directly (automatic conversion)
+spark_df = spark.sql("SELECT address FROM your_table WHERE address IS NOT NULL")
+screened_df = screen_dataframe(spark_df, address_column='address', include_indirect=True)
 
 # Convert back to Spark DataFrame for further processing
 screened_spark_df = spark.createDataFrame(screened_df)
